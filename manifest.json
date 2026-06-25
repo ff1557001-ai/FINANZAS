@@ -5,7 +5,7 @@
   "start_url": "/FINANZAS/",
   "display": "standalone",
   "background_color": "#111111",
-  "theme_color": "#8B1A3A",
+  "theme_color": "#111111",
   "icons": [
     {
       "src": "icon-192.png",
