@@ -386,11 +386,11 @@ html,body{background:var(--surface);color:var(--text);font-family:-apple-system,
     <div class="metrics">
       <div class="metric"><div class="metric-label">Ingresos</div><div class="metric-value blue" id="m-ingresos">S/ 0</div></div>
       <div class="metric"><div class="metric-label">Gastos</div><div class="metric-value neutral" id="m-gastos">S/ 0</div></div>
-      <div class="metric"><div class="metric-label">Saldo</div><div class="metric-value neutral" id="m-saldo">S/ 0</div></div>
+      <div class="metric"><div class="metric-label">Saldo</div><div class="metric-value neutral" id="m-saldo">S/ 0</div><div id="m-saldo-sub" style="font-size:10px;color:var(--text-muted);margin-top:2px"></div></div>
     </div>
 
     <div class="metrics-2">
-      <div class="metric"><div class="metric-label">% del ingreso</div><div class="metric-value neutral" id="m-pct">0%</div></div>
+      <div class="metric"><div class="metric-label">% del disponible</div><div class="metric-value neutral" id="m-pct">0%</div></div>
       <div class="metric"><div class="metric-label">Proyección mes</div><div class="metric-value neutral" id="m-proyeccion">S/ 0</div></div>
     </div>
 
@@ -552,6 +552,9 @@ html,body{background:var(--surface);color:var(--text);font-family:-apple-system,
         <div class="analisis-sub" id="a-comp-sub">—</div>
       </div>
     </div>
+
+    <div class="section-label">Cierre de meses</div>
+    <div class="card" style="margin-bottom:8px"><div id="cierres-list"></div></div>
 
     <div class="section-label">Presupuesto por categoría</div>
     <div class="collapse-card">
@@ -808,6 +811,33 @@ function getMesAnteriorKey(){let m=viewMonth-1,y=viewYear;if(m<0){m=11;y--;}retu
 function cambiarMes(d){viewMonth+=d;if(viewMonth>11){viewMonth=0;viewYear++;}if(viewMonth<0){viewMonth=11;viewYear--;}viewDay=viewYear===now.getFullYear()&&viewMonth===now.getMonth()?now.getDate():1;updateAll();updateDayView();}
 function gastosDelMes(key){const k=key||getMesKey();return gastos.filter(g=>g.fecha&&g.fecha.startsWith(k));}
 function ingresosDelMes(key){const k=key||getMesKey();return ingresos.filter(i=>i.mes===k);}
+// Saldo que llega desde meses anteriores (ingresos - gastos acumulados antes de `key`)
+function getArrastre(key){
+  const k=key||getMesKey();
+  return ingresos.filter(i=>i.mes&&i.mes<k).reduce((a,i)=>a+i.monto,0)
+        -gastos.filter(g=>g.fecha&&g.fecha.slice(0,7)<k).reduce((a,g)=>a+g.monto,0);
+}
+// Un cierre por cada mes con movimientos, calculado desde los datos (no se puede perder ni reiniciar)
+function getCierres(){
+  const keys=new Set();
+  ingresos.forEach(i=>{if(i.mes)keys.add(i.mes);});
+  gastos.forEach(g=>{if(g.fecha)keys.add(g.fecha.slice(0,7));});
+  let acum=0;
+  return [...keys].sort().map(key=>{
+    const ing=ingresos.filter(i=>i.mes===key).reduce((a,i)=>a+i.monto,0);
+    const gas=gastos.filter(g=>g.fecha&&g.fecha.startsWith(key)).reduce((a,g)=>a+g.monto,0);
+    const anterior=acum;
+    acum=anterior+ing-gas;
+    return{key,ing,gas,anterior,saldo:acum};
+  });
+}
+function irAMes(key){
+  const [y,m]=key.split('-').map(Number);
+  viewYear=y;viewMonth=m-1;
+  viewDay=(y===now.getFullYear()&&viewMonth===now.getMonth())?now.getDate():1;
+  updateAll();updateAnalisis();updateDayView();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
 function catColor(c){return CAT_COLORS[c]||'#888';}
 function catEmoji(c){return CAT_EMOJIS[c]||'📦';}
 function fmt(n){return`S/ ${(+n).toFixed(2)}`;}
@@ -837,10 +867,12 @@ function updateAll(){
   const im=ingresosDelMes();
   const totalG=gm.reduce((s,g)=>s+g.monto,0);
   const totalI=im.reduce((s,i)=>s+i.monto,0);
-  const saldo=totalI-totalG;
+  const arrastre=getArrastre();
+  const disponible=Math.max(arrastre,0)+totalI;
+  const saldo=arrastre+totalI-totalG;
   const lim=parseFloat(document.getElementById('limite-input').value)||1000;
   const pct=lim>0?totalG/lim*100:0;
-  const pctIng=totalI>0?totalG/totalI*100:0;
+  const pctIng=disponible>0?totalG/disponible*100:0;
 
   // Proyección
   const diaActual=viewMonth===now.getMonth()&&viewYear===now.getFullYear()?now.getDate():new Date(viewYear,viewMonth+1,0).getDate();
@@ -852,7 +884,8 @@ function updateAll(){
   document.getElementById('m-ingresos').textContent=fmt(totalI);
   document.getElementById('m-gastos').textContent=fmt(totalG);
   document.getElementById('m-gastos').className='metric-value '+(pct>=90?'danger':pct>=70?'warn':'ok');
-  document.getElementById('m-saldo').textContent=fmt(Math.abs(saldo));
+  document.getElementById('m-saldo').textContent=(saldo<0?'-':'')+fmt(Math.abs(saldo));
+  document.getElementById('m-saldo-sub').textContent=arrastre!==0?`incluye ${arrastre<0?'-':''}${fmt(Math.abs(arrastre))} anterior`:'';
   document.getElementById('m-saldo').className='metric-value '+(saldo>=0?'ok':'danger');
   document.getElementById('m-pct').textContent=`${Math.round(pctIng)}%`;
   document.getElementById('m-pct').className='metric-value '+(pctIng>=90?'danger':pctIng>=70?'warn':'ok');
@@ -947,7 +980,27 @@ function updateCharts(gm,im){
   charts['ing-vs-gas']=new Chart(document.getElementById('chart-ing-vs-gas'),{type:'bar',data:{labels:last4.map(m=>m.label),datasets:[{label:'Ingresos',data:ingD,backgroundColor:'rgba(74,127,193,0.7)',borderRadius:4,borderSkipped:false},{label:'Gastos',data:gasD,backgroundColor:'rgba(107,31,58,0.7)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7A80A0',font:{size:10},boxWidth:10}}},scales:{x:{ticks:{color:'#7A80A0',font:{size:9}},grid:{display:false},border:{display:false}},y:{ticks:{color:'#7A80A0',font:{size:9},callback:v=>`S/${v}`},grid:{color:'rgba(255,255,255,0.04)'},border:{display:false}}}}});
 }
 
+function renderCierres(){
+  const el=document.getElementById('cierres-list');
+  if(!el)return;
+  const cierres=getCierres().reverse();
+  if(!cierres.length){el.innerHTML='<div class="empty">Sin meses registrados</div>';return;}
+  const actual=getMesKey();
+  el.innerHTML=cierres.map(c=>{
+    const [y,m]=c.key.split('-').map(Number);
+    const ahorro=c.ing-c.gas;
+    return`<div onclick="irAMes('${c.key}')" style="cursor:pointer;padding:10px 0;border-bottom:0.5px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <div style="font-size:13px;font-weight:600">${MESES[m-1]} ${y}${c.key===actual?' · viendo':''}</div>
+        <div style="font-size:14px;font-weight:700;color:${c.saldo>=0?'#4AC17A':'#E05050'}">${c.saldo<0?'-':''}${fmt(Math.abs(c.saldo))}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Ingresos ${fmt(c.ing)} · Gastos ${fmt(c.gas)} · ${ahorro>=0?'Sobró':'Faltó'} ${fmt(Math.abs(ahorro))}${c.anterior!==0?' · Arrastre '+(c.anterior<0?'-':'')+fmt(Math.abs(c.anterior)):''}</div>
+    </div>`;
+  }).join('');
+}
+
 function updateAnalisis(){
+  renderCierres();
   const gm=gastosDelMes();
   const totalG=gm.reduce((s,g)=>s+g.monto,0);
   const diaActual=viewMonth===now.getMonth()&&viewYear===now.getFullYear()?now.getDate():new Date(viewYear,viewMonth+1,0).getDate();
@@ -1364,7 +1417,7 @@ function verificarLimiteYNotificar(montoNuevo, categoriaGasto){
   // ── 2. PRESUPUESTO POR CATEGORÍA ─────────────────────────
   if(!categoriaGasto)return;
   const budgetKey='budget_'+categoriaGasto;
-  const budgetCat=parseFloat(localStorage.getItem(budgetKey)||'0');
+  const budgetCat=parseFloat(budgets[categoriaGasto]||0);
   if(!budgetCat||budgetCat<=0)return;
 
   const totalCat=gm.filter(g=>g.categoria===categoriaGasto).reduce((s,g)=>s+g.monto,0)+montoNuevo;
@@ -1810,7 +1863,7 @@ function exportarPDF(){
     <div class="metrics">
       <div class="metric"><div class="metric-label">Ingresos</div><div class="metric-value" style="color:#4A7FC1">${fmt(totalI)}</div></div>
       <div class="metric"><div class="metric-label">Gastos</div><div class="metric-value" style="color:#6B1F3A">${fmt(totalG)}</div></div>
-      <div class="metric"><div class="metric-label">Saldo</div><div class="metric-value" style="color:${totalI-totalG>=0?'#4AC17A':'#E05050'}">${fmt(totalI-totalG)}</div></div>
+      <div class="metric"><div class="metric-label">Saldo${getArrastre()!==0?' (con '+fmt(getArrastre())+' anterior)':''}</div><div class="metric-value" style="color:${getArrastre()+totalI-totalG>=0?'#4AC17A':'#E05050'}">${fmt(getArrastre()+totalI-totalG)}</div></div>
     </div>
 
     ${graficosResumen}
