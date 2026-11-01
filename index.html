@@ -838,6 +838,26 @@ function irAMes(key){
   updateAll();updateAnalisis();updateDayView();
   window.scrollTo({top:0,behavior:'smooth'});
 }
+// Proyección de fin de mes: lo gastado + ritmo diario estimado x días restantes.
+// Los primeros días el ritmo se apoya en el mes anterior (o en un mínimo de 7 días) para que no se dispare.
+function proyectarMes(totalG){
+  const esActual=viewMonth===now.getMonth()&&viewYear===now.getFullYear();
+  const diasMes=new Date(viewYear,viewMonth+1,0).getDate();
+  const dia=esActual?now.getDate():diasMes;
+  if(dia>=diasMes)return totalG;
+  const prevKey=getMesAnteriorKey();
+  const prevTotal=gastosDelMes(prevKey).reduce((a,g)=>a+g.monto,0);
+  const [py,pm]=prevKey.split('-').map(Number);
+  const diasPrev=new Date(py,pm,0).getDate();
+  let ritmo;
+  if(prevTotal>0){
+    const w=dia/diasMes;
+    ritmo=w*(totalG/dia)+(1-w)*(prevTotal/diasPrev);
+  }else{
+    ritmo=totalG/Math.max(dia,7);
+  }
+  return totalG+ritmo*(diasMes-dia);
+}
 function catColor(c){return CAT_COLORS[c]||'#888';}
 function catEmoji(c){return CAT_EMOJIS[c]||'📦';}
 function fmt(n){return`S/ ${(+n).toFixed(2)}`;}
@@ -877,7 +897,7 @@ function updateAll(){
   // Proyección
   const diaActual=viewMonth===now.getMonth()&&viewYear===now.getFullYear()?now.getDate():new Date(viewYear,viewMonth+1,0).getDate();
   const diasMes=new Date(viewYear,viewMonth+1,0).getDate();
-  const proyeccion=diaActual>0?(totalG/diaActual)*diasMes:0;
+  const proyeccion=proyectarMes(totalG);
 
   document.getElementById('month-label').textContent=`${MESES[viewMonth]} ${viewYear}`;
   document.getElementById('header-sub').textContent=`Resumen de ${MESES[viewMonth].toLowerCase()} ${viewYear}`;
@@ -1021,7 +1041,7 @@ function updateAnalisis(){
   document.getElementById('a-cat-sub').textContent=catTop?fmt(catTop[1]):'—';
 
   // Proyección
-  const proy=diaActual>0?(totalG/diaActual)*diasMes:0;
+  const proy=proyectarMes(totalG);
   const lim=parseFloat(document.getElementById('limite-input').value)||1000;
   document.getElementById('a-proy').textContent=fmt(proy);
   document.getElementById('a-proy-sub').className='analisis-sub '+(proy>lim?'danger':proy>lim*0.8?'warn':'ok');
