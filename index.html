@@ -22,7 +22,7 @@
   --text:#E8EAF0; --text-muted:#7A80A0;
   --green:#4AC17A; --orange:#C17A4A; --red:#E05050; --blue:#4A7FC1;
 }
-*{box-sizing:border-box;margin:0;padding:0;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{background:var(--surface);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;}
 
 /* LAYOUT */
@@ -475,6 +475,103 @@ html,body{font-family:ui-rounded,'SF Pro Rounded','Nunito','Segoe UI',system-ui,
 
 /* Splash: solo la primera apertura del día */
 .sin-splash #splash{display:none;}
+
+/* ═══ ANIMACIONES ═══ (solo estilos; respetan "reducir movimiento") */
+@keyframes fx-fade{from{opacity:0}to{opacity:1}}
+@keyframes fx-up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes fx-row{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@keyframes fx-sheet{from{transform:translateY(100%)}to{transform:none}}
+@keyframes fx-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes fx-pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.15);opacity:1}100%{transform:scale(1)}}
+@keyframes fx-icon{0%{transform:translateY(0) scale(1)}40%{transform:translateY(-4px) scale(1.18)}100%{transform:translateY(0) scale(1)}}
+@keyframes fx-slide-l{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
+@keyframes fx-slide-r{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+@keyframes fx-shine{0%{transform:translateX(-120%)}60%,100%{transform:translateX(320%)}}
+@keyframes fx-alert{0%{opacity:0;transform:translateY(-8px)}40%{transform:translateX(-4px)}60%{transform:translateX(4px)}100%{opacity:1;transform:none}}
+@keyframes fx-fab{0%{transform:scale(0) rotate(-90deg)}70%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes fx-opt{from{opacity:0;transform:translateY(10px) scale(.9)}to{opacity:1;transform:none}}
+
+/* Cambio de pestaña: las tarjetas entran en cascada */
+.tab-content.active>*{animation:fx-up .45s cubic-bezier(.2,.8,.2,1) backwards;}
+.tab-content.active>*:nth-child(1){animation-delay:0ms}
+.tab-content.active>*:nth-child(2){animation-delay:50ms}
+.tab-content.active>*:nth-child(3){animation-delay:100ms}
+.tab-content.active>*:nth-child(4){animation-delay:150ms}
+.tab-content.active>*:nth-child(5){animation-delay:200ms}
+.tab-content.active>*:nth-child(6){animation-delay:240ms}
+.tab-content.active>*:nth-child(n+7){animation-delay:280ms}
+#tab-resumen.active .metrics .metric{animation:fx-up .5s cubic-bezier(.2,.8,.2,1) backwards;}
+#tab-resumen.active .metrics .metric:nth-child(3){animation-delay:60ms}
+#tab-resumen.active .metrics .metric:nth-child(1){animation-delay:140ms}
+#tab-resumen.active .metrics .metric:nth-child(2){animation-delay:200ms}
+#tab-resumen.active .metrics-2 .metric:nth-child(1){animation:fx-up .5s .25s cubic-bezier(.2,.8,.2,1) backwards;}
+#tab-resumen.active .metrics-2 .metric:nth-child(2){animation:fx-up .5s .31s cubic-bezier(.2,.8,.2,1) backwards;}
+
+/* Deslizar al cambiar de mes */
+.tab-content.fx-slide-l{animation:fx-slide-l .32s cubic-bezier(.2,.8,.2,1);}
+.tab-content.fx-slide-r{animation:fx-slide-r .32s cubic-bezier(.2,.8,.2,1);}
+
+/* Barras que crecen desde la izquierda */
+.cat-bar,.budget-cat-bar,.comp-bar,.meta-bar-fill{transform-origin:left center;animation:fx-grow .7s cubic-bezier(.2,.8,.2,1) backwards;}
+.bar-fill{position:relative;overflow:hidden;transform-origin:left center;animation:fx-grow .8s cubic-bezier(.2,.8,.2,1) backwards;}
+
+/* Filas y tarjetas de listas */
+.gasto-row,.abono-row,.day-gasto-row,.cat-row,.rec-row,.ingreso-tag,.frec-btn,.comp-row{animation:fx-row .25s ease-out backwards;}
+.meta-card{animation:fx-up .4s cubic-bezier(.2,.8,.2,1) backwards;}
+.meta-card:nth-child(2){animation-delay:60ms}.meta-card:nth-child(3){animation-delay:120ms}.meta-card:nth-child(n+4){animation-delay:180ms}
+.gasto-row:nth-child(2),.abono-row:nth-child(2){animation-delay:30ms}
+.gasto-row:nth-child(3),.abono-row:nth-child(3){animation-delay:60ms}
+.gasto-row:nth-child(4),.abono-row:nth-child(4){animation-delay:90ms}
+.gasto-row:nth-child(5),.abono-row:nth-child(5){animation-delay:120ms}
+.gasto-row:nth-child(n+6),.abono-row:nth-child(n+6){animation-delay:150ms}
+.meta-completada .meta-tag-ok{display:inline-block;animation:fx-pop .5s .3s backwards;}
+
+/* Respuesta táctil */
+.btn-add,.btn-sec,.btn-blue,.btn-connect,.btn-sync,.btn-pdf,.btn-abonar,.btn-abonar-sync,.btn-save-frec,.frec-btn,.filtro-chip,.month-btn,.day-nav-btn,.fab-option-btn,.btn-del,.btn-edit,.modal-close{transition:transform .15s ease,background-color .2s,border-color .2s,color .2s,opacity .2s;}
+.btn-add:active,.btn-sec:active,.btn-blue:active,.btn-connect:active,.btn-sync:active,.btn-pdf:active,.btn-abonar:active,.btn-abonar-sync:active,.btn-save-frec:active,.frec-btn:active,.filtro-chip:active,.month-btn:active,.day-nav-btn:active{transform:scale(.95);}
+.btn-del:active,.btn-edit:active,.modal-close:active{transform:scale(.85);}
+.btn-sync:active{transform:rotate(180deg) scale(.95);}
+.metric,.card,.analisis-card,.meta-card,.collapse-card{transition:transform .2s ease,border-color .2s,box-shadow .2s;}
+@media (hover:hover){
+  .metric:hover,.analisis-card:hover,.meta-card:hover{transform:translateY(-2px);border-color:var(--hero-border);}
+}
+.collapse-body{animation:fx-fade .25s ease;}
+.collapse-toggle{transition:background-color .2s,transform .15s;}
+.collapse-header:active .collapse-toggle{transform:scale(.92);}
+
+/* Barra inferior */
+.tabs .tab{transition:color .25s,transform .15s;}
+.tabs .tab:active{transform:scale(.92);}
+.tabs .tab.active::before{animation:fx-icon .4s ease;}
+.tabs .tab.active::after{animation:fx-grow .3s ease backwards;}
+
+/* Modales: fondo en fundido y hoja que sube */
+.modal-overlay.open{animation:fx-fade .2s ease;}
+.modal-overlay.open .modal,.modal-overlay.open .modal-abono{animation:fx-sheet .34s cubic-bezier(.2,.9,.25,1);}
+
+/* Botón flotante */
+.fab{animation:fx-fab .5s .4s cubic-bezier(.34,1.56,.64,1) backwards;}
+.fab:active{transform:scale(.9);}
+.fab.fab-open:active{transform:rotate(45deg) scale(.9);}
+.fab-menu-open .fab-option{animation:fx-opt .28s cubic-bezier(.2,.8,.2,1) backwards;}
+.fab-menu-open .fab-option:nth-child(3){animation-delay:0ms}
+.fab-menu-open .fab-option:nth-child(2){animation-delay:50ms}
+.fab-menu-open .fab-option:nth-child(1){animation-delay:100ms}
+.fab-backdrop.fab-backdrop-open{animation:fx-fade .2s ease;}
+
+/* Avisos */
+.alert.show{animation:fx-alert .5s ease;}
+.toast{transition:opacity .25s,transform .3s cubic-bezier(.2,.9,.25,1);transform:translateY(16px) scale(.97);}
+.toast.show{transform:none;}
+
+/* Brillo suave en la barra de límite (solo si el sistema permite movimiento) */
+@media (prefers-reduced-motion:no-preference){
+  .bar-fill::after{content:'';position:absolute;top:0;bottom:0;left:0;width:35%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);animation:fx-shine 3.2s 1s ease-in-out infinite;}
+}
+@media (prefers-reduced-motion:reduce){
+  .bar-fill::after{display:none;}
+  .tab-content.active>*,.gasto-row,.meta-card{animation:none!important;}
+}
 
 </style>
 </head>
@@ -1035,7 +1132,32 @@ let viewDay=now.getDate();
 
 function getMesKey(){return`${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;}
 function getMesAnteriorKey(){let m=viewMonth-1,y=viewYear;if(m<0){m=11;y--;}return`${y}-${String(m+1).padStart(2,'0')}`;}
-function cambiarMes(d){viewMonth+=d;if(viewMonth>11){viewMonth=0;viewYear++;}if(viewMonth<0){viewMonth=11;viewYear--;}viewDay=viewYear===now.getFullYear()&&viewMonth===now.getMonth()?now.getDate():1;updateAll();updateDayView();}
+function animarCambioMes(d){
+  const el=document.querySelector('.tab-content.active');if(!el)return;
+  el.classList.remove('fx-slide-l','fx-slide-r');void el.offsetWidth;
+  el.classList.add(d>0?'fx-slide-l':'fx-slide-r');
+}
+// Las cifras de Resumen cuentan desde el valor anterior hasta el nuevo
+function animarCifras(){
+  if(window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches)return;
+  ['m-ingresos','m-gastos','m-saldo','m-pct','m-proyeccion'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const txt=el.textContent,m=txt.match(/^(-?)(S\/ )?(\d+(?:\.\d+)?)(%?)$/);
+    if(!m)return;
+    const dec=m[3].includes('.')?2:0,destino=(m[1]?-1:1)*parseFloat(m[3]),origen=el._v||0;
+    el._v=destino;
+    if(el._raf)cancelAnimationFrame(el._raf);
+    if(origen===destino)return;
+    const t0=performance.now(),dur=650;
+    const paso=t=>{
+      const k=Math.min((t-t0)/dur,1),e=1-Math.pow(1-k,3),v=origen+(destino-origen)*e;
+      el.textContent=k>=1?txt:(v<0?'-':'')+(m[2]||'')+Math.abs(v).toFixed(dec)+m[4];
+      if(k<1)el._raf=requestAnimationFrame(paso);
+    };
+    el._raf=requestAnimationFrame(paso);
+  });
+}
+function cambiarMes(d){animarCambioMes(d);viewMonth+=d;if(viewMonth>11){viewMonth=0;viewYear++;}if(viewMonth<0){viewMonth=11;viewYear--;}viewDay=viewYear===now.getFullYear()&&viewMonth===now.getMonth()?now.getDate():1;updateAll();updateDayView();}
 function gastosDelMes(key){const k=key||getMesKey();return gastos.filter(g=>g.fecha&&g.fecha.startsWith(k));}
 function ingresosDelMes(key){const k=key||getMesKey();return ingresos.filter(i=>i.mes===k);}
 // Saldo que llega desde meses anteriores (ingresos - gastos acumulados antes de `key`)
@@ -1215,6 +1337,7 @@ function updateAll(){
 
   limite=lim;
   save();
+  animarCifras();
   updateIngresosList(im);
   updateCats(gm,totalG);
   updateCharts(gm,im);
@@ -2431,6 +2554,7 @@ function updateDayView(){
 }
 
 // INIT
+if(window.Chart){Chart.defaults.animation={duration:800,easing:'easeOutQuart'};}
 document.getElementById('limite-input').value=limite;
 document.getElementById('f-fecha').value=new Date().toISOString().split('T')[0];
 poblarCategorias();
