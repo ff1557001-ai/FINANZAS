@@ -1770,13 +1770,28 @@ function confirmarAbono(){
   enviarAbonoASheets(metaAbonarId,meta.nombre,monto,nota,metaAbonarTipo);
 }
 
+// Metas eliminadas: se recuerdan en este dispositivo para que la sincronización con Sheets no las traiga de vuelta
+function metasEliminadas(){return lsGet('fin_metas_eliminadas',[]);}
+function guardarMetasEliminadas(a){try{localStorage.setItem('fin_metas_eliminadas',JSON.stringify(a.slice(-200)));}catch(e){}}
+function metaEliminada(m){return metasEliminadas().some(t=>String(t.id)===String(m.id));}
+function abonoHuerfano(a){
+  const idv=a.metaId&&String(a.metaId)!=='null'&&String(a.metaId)!=='';
+  return metasEliminadas().some(t=>idv?String(t.id)===String(a.metaId):(a.metaNombre&&t.nombre&&a.metaNombre.trim().toLowerCase()===t.nombre.trim().toLowerCase()));
+}
+function abonoEsDeMeta(a,meta){
+  const idv=meta.id&&String(meta.id)!=='null'&&String(meta.id)!=='';
+  const aid=a.metaId&&String(a.metaId)!=='null'&&String(a.metaId)!=='';
+  return (idv&&aid&&String(a.metaId)===String(meta.id))||(meta.nombre&&a.metaNombre&&a.metaNombre.trim().toLowerCase()===meta.nombre.trim().toLowerCase());
+}
 function eliminarMeta(id){
   const meta=metas.find(m=>String(m.id)===String(id));if(!meta)return;
-  const mi=metas.indexOf(meta),ab=abonos.filter(a=>String(a.metaId)===String(id));let q=[];
+  const mi=metas.indexOf(meta),ab=abonos.filter(a=>abonoEsDeMeta(a,meta));let q=[];
   borrarConDeshacer(`Meta «${meta.nombre}» eliminada`,
     ()=>{q=cola.filter(x=>(x.kind==='meta'||x.kind==='abono')&&String(x.params.metaId)===String(id));quitarDeCola(x=>q.includes(x));
-         metas=metas.filter(m=>String(m.id)!==String(id));abonos=abonos.filter(a=>String(a.metaId)!==String(id));save();updateAhorros();},
-    ()=>{metas.splice(Math.min(mi,metas.length),0,meta);abonos.push(...ab);if(q.length){cola.push(...q);guardarCola();procesarCola();}save();updateAhorros();updateMetasResumen();});
+         const t=metasEliminadas();if(!t.some(x=>String(x.id)===String(id)))t.push({id:String(id),nombre:meta.nombre});guardarMetasEliminadas(t);
+         metas=metas.filter(m=>String(m.id)!==String(id));abonos=abonos.filter(a=>!ab.includes(a));save();updateAhorros();},
+    ()=>{guardarMetasEliminadas(metasEliminadas().filter(x=>String(x.id)!==String(id)));
+         metas.splice(Math.min(mi,metas.length),0,meta);abonos.push(...ab);if(q.length){cola.push(...q);guardarCola();procesarCola();}save();updateAhorros();updateMetasResumen();});
 }
 
 function updateAhorros(){
@@ -1835,7 +1850,8 @@ function updateAhorros(){
 
 function updateMetasResumen(){
   const wrap=document.getElementById('metas-resumen-wrap');
-  if(!wrap||!metas.length)return;
+  if(!wrap)return;
+  if(!metas.length){wrap.innerHTML='';return;}
   const total=metas.reduce((s,m)=>s+abonarTotal(m.id,m.nombre),0);
   const obj=metas.reduce((s,m)=>s+m.objetivo,0);
   wrap.innerHTML=`<div class="ingresos-card" style="margin-bottom:1rem">
@@ -2241,7 +2257,7 @@ function connectSheetsTab(id,tabName,cbName,tipo){
           const objetivo=parseFloat(r.c[2]?.v)||0;
           const fechaLimite=r.c[3]?.v||'';
           return{id:metaId,nombre,objetivo,fecha:fechaLimite,source:'sheets'};
-        }).filter(m=>m.objetivo>0);
+        }).filter(m=>m.objetivo>0&&!metaEliminada(m));
         // Merge: keep local metas that aren't in sheets yet
         const sheetIds=new Set(imported.map(m=>String(m.id)));
         const localOnly=metas.filter(m=>!sheetIds.has(String(m.id)));
@@ -2264,7 +2280,7 @@ function connectSheetsTab(id,tabName,cbName,tipo){
             tipo:tipoFinal,
             source:'sheets'
           };
-        }).filter(a=>a.monto>0);
+        }).filter(a=>a.monto>0&&!abonoHuerfano(a));
         abonos=abonos.filter(a=>a.source!=='sheets');
         abonos=[...abonos,...imported];
         save();
