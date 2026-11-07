@@ -573,6 +573,13 @@ html,body{font-family:ui-rounded,'SF Pro Rounded','Nunito','Segoe UI',system-ui,
   .tab-content.active>*,.gasto-row,.meta-card{animation:none!important;}
 }
 
+/* Táctil: respuesta inmediata y sin zonas muertas */
+button,.tab,.filtro-chip,.frec-btn,.fab-option,[onclick]{touch-action:manipulation;}
+.filtro-chip{transition:transform .12s ease,border-color .12s;}
+.filtro-chip:active{background:var(--wine-dim);color:var(--accent);}
+.fab-container{pointer-events:none;}
+.fab,.fab-menu.fab-menu-open{pointer-events:auto;}
+
 </style>
 </head>
 <body>
@@ -1669,7 +1676,7 @@ function renderHistoryFiltrado(){
   const gm=_gastosDelMesCache;
   const busq=(document.getElementById('hist-busqueda')?.value||'').trim().toLowerCase();
   let filtrados=[...gm];
-  if(_filtrocat) filtrados=filtrados.filter(g=>g.categoria===_filtrocat);
+  if(_filtrocat) filtrados=filtrados.filter(g=>catKey(g.categoria)===catKey(_filtrocat));
   if(_filtroPago) filtrados=filtrados.filter(g=>g.metodoPago===_filtroPago);
   if(busq) filtrados=filtrados.filter(g=>(g.descripcion||'').toLowerCase().includes(busq)||(g.categoria||'').toLowerCase().includes(busq));
   const sorted=filtrados.sort((a,b)=>b.fecha.localeCompare(a.fecha));
@@ -1685,7 +1692,7 @@ function renderHistoryFiltrado(){
     }
   }
   if(!sorted.length){
-    el.innerHTML=`<div class="empty">${hayFiltro?'Sin resultados para estos filtros':'Sin gastos este mes'}</div>`;
+    el.innerHTML=`<div class="empty">${hayFiltro?(_filtrocat&&!_filtroPago&&!busq?`No hay gastos de ${esc(catLabel(_filtrocat))} este mes`:'Sin resultados para estos filtros'):'Sin gastos este mes'}</div>`;
     return;
   }
   el.innerHTML=sorted.map(g=>`<div class="gasto-row">
