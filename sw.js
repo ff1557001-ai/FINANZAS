@@ -3,7 +3,7 @@
 // - Archivos propios: se sirven desde caché al instante y se actualizan en segundo plano.
 // - Google Sheets / Apps Script y cualquier otro dominio: pasan directo a la red (nunca se cachean).
 // Al publicar cambios grandes, sube el número de versión para limpiar la caché anterior.
-const VERSION = 'finanzas-v4';
+const VERSION = 'finanzas-v5';
 const CHART_URL = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
 const SHELL = ['./', 'index.html', 'manifest.json',
                'favicon-32.png', 'icono-192.png', 'icon-192.png', CHART_URL];
@@ -37,7 +37,8 @@ self.addEventListener('fetch', e => {
 async function archivoPropio(req, e) {
   const cache = await caches.open(VERSION);
   const guardado = await cache.match(req, { ignoreSearch: true });
-  const red = fetch(req).then(async res => {
+  // no-cache: siempre pregunta al servidor si hay cambios (evita que GitHub Pages sirva una copia vieja hasta 10 min)
+  const red = fetch(req, { cache: 'no-cache' }).then(async res => {
     if (res && res.ok && res.type === 'basic') {
       const antes = guardado && guardado.headers.get('etag');
       const ahora = res.headers.get('etag');
