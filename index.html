@@ -931,7 +931,7 @@ button,.tab,.filtro-chip,.frec-btn,.fab-option,[onclick]{touch-action:manipulati
       <div class="nota-ajuste">Al importar se suman los registros que falten; no se borra nada. Lo importado queda solo en este dispositivo.</div>
     </div>
 
-    <div class="nota-ajuste" style="text-align:center;margin:4px 0 18px">Versión 6 · gráficos sin parpadeo</div>
+    <div class="nota-ajuste" style="text-align:center;margin:4px 0 18px">Versión 7</div>
 
     <div class="form-section">
       <div class="form-title">Gastos frecuentes configurados</div>
@@ -1174,7 +1174,7 @@ function animarCifras(){
     el._raf=requestAnimationFrame(paso);
   });
 }
-function cambiarMes(d){animarCambioMes(d);viewMonth+=d;if(viewMonth>11){viewMonth=0;viewYear++;}if(viewMonth<0){viewMonth=11;viewYear--;}viewDay=viewYear===now.getFullYear()&&viewMonth===now.getMonth()?now.getDate():1;updateAll();updateDayView();}
+function cambiarMes(d){animarCambioMes(d);viewMonth+=d;if(viewMonth>11){viewMonth=0;viewYear++;}if(viewMonth<0){viewMonth=11;viewYear--;}viewDay=viewYear===now.getFullYear()&&viewMonth===now.getMonth()?now.getDate():1;reiniciarGraficos();updateAll();updateDayView();}
 function gastosDelMes(key){const k=key||getMesKey();return gastos.filter(g=>g.fecha&&g.fecha.startsWith(k));}
 function ingresosDelMes(key){const k=key||getMesKey();return ingresos.filter(i=>i.mes===k);}
 // Saldo que llega desde meses anteriores (ingresos - gastos acumulados antes de `key`)
@@ -1295,6 +1295,7 @@ function switchTab(name){
   document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
   activarEntrada(document.getElementById('tab-'+name));
+  if(name==='resumen'||name==='analisis'){reiniciarGraficos(name==='resumen'?['dona','linea']:['7d','meses','ing-vs-gas']);updateAll();}
   if(name==='analisis') updateAnalisis();
   if(name==='ahorros') updateAhorros();
   if(name==='ajustes') updateAjustes();
@@ -1409,6 +1410,8 @@ function montarChart(id,canvasId,cfg){
   destroyChart(id);
   return new Chart(el,cfg);
 }
+// Repite la animación de entrada (el giro) de los gráficos indicados; se usa solo en acciones del usuario
+function reiniciarGraficos(ids){(ids||Object.keys(charts)).forEach(destroyChart);}
 // Activa las animaciones de entrada solo un momento (al abrir pestaña o cambiar de mes)
 function activarEntrada(el){
   if(!el)return;
@@ -1977,6 +1980,7 @@ window.addEventListener('online',()=>{cola.forEach(x=>{x.intentos=0;});procesarC
 function enviarIngresoASheets(fecha,desc,monto){
   const reqId=nuevoId('r');
   ingresos.push({id:nuevoId('ing'),reqId,monto,desc,fecha,mes:(fecha||'').slice(0,7)||getMesKey(),source:'local',pendiente:true});
+  reiniciarGraficos(['dona','linea']);
   save();updateAll();toast('Ingreso agregado','ok');
   encolar({reqId,kind:'ingreso',params:{accion:'ingreso',fecha,descripcion:desc,monto:String(monto)}});
 }
@@ -1995,6 +1999,7 @@ function enviarASheets(fecha,cat,monto,desc,pago,gid,silencioso){
   cat=canonCat(cat);
   const reqId=nuevoId('r'),gastoId=gid||nuevoId('g');
   gastos.push({id:nuevoId('loc'),gastoId,reqId,monto,categoria:cat,fecha,descripcion:desc,metodoPago:pago,source:'local',pendiente:true});
+  if(!silencioso)reiniciarGraficos(['dona','linea']);
   save();updateAll();if(!silencioso)toast('Gasto agregado','ok');
   encolar({reqId,kind:'gasto',params:{fecha,categoria:cat,monto:String(monto),descripcion:desc,metodo:pago,comprobante:'',gastoId}});
 }
@@ -2634,7 +2639,7 @@ updateHeaderTitle();
 // Registrar Service Worker para notificaciones en PWA/móvil
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message',e=>{
-    if(e.data&&e.data.tipo==='actualizado')toast('Hay una versión nueva de la app','ok',{ms:10000,accion:{texto:'Actualizar',fn:()=>location.reload()}});
+    if(e.data&&e.data.tipo==='actualizado'&&!window._avisoVersion){window._avisoVersion=true;toast('Hay una versión nueva de la app','ok',{ms:10000,accion:{texto:'Actualizar',fn:()=>location.reload()}});}
   });
   navigator.serviceWorker.register('sw.js').then(reg=>{
     console.log('[Finanzas] SW registrado:', reg.scope);
