@@ -168,7 +168,8 @@ html,body{background:var(--surface);color:var(--text);font-family:-apple-system,
 .gasto-row:last-child{border-bottom:none;}
 .gasto-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;}
 .gasto-info{flex:1;min-width:0;}
-.gasto-desc{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gasto-desc{font-size:13px;display:flex;align-items:center;min-width:0;}
+.gasto-desc-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
 .gasto-meta{font-size:11px;color:var(--text-muted);margin-top:2px;}
 .gasto-amount{font-size:14px;font-weight:700;flex-shrink:0;}
 .btn-del{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:4px;opacity:0.4;}
@@ -176,6 +177,9 @@ html,body{background:var(--surface);color:var(--text);font-family:-apple-system,
 .badge{font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px;}
 .badge-sheets{background:rgba(74,127,193,0.15);color:#4A7FC1;}
 .badge-local{background:rgba(255,255,255,0.06);color:var(--text-muted);}
+.badge{flex-shrink:0;}
+.badge-pend{background:rgba(193,122,74,0.18);color:#C17A4A;}
+.badge-error{background:rgba(224,80,80,0.18);color:#E05050;}
 
 /* FILTROS HISTORIAL */
 .filtros-wrap{background:var(--surface3);border-radius:10px;padding:10px 12px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px;}
@@ -1277,6 +1281,7 @@ function eliminarCategoria(c){
 function setBudget(cat,v){const n=parseFloat(v)||0;budgets[cat]=n;save();enviarConfigASheets('budget_'+cat,n);}
 
 function fmt(n){return`S/ ${(+n).toFixed(2)}`;}
+function hoyLocal(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function fmtFecha(s){if(!s)return'';const[y,m,d]=String(s).split('-');const mn=MESES[parseInt(m)-1];return mn?`${parseInt(d)} ${mn.slice(0,3).toLowerCase()}`:'';}
 
 function switchTab(name){
@@ -1698,7 +1703,7 @@ function renderHistoryFiltrado(){
   el.innerHTML=sorted.map(g=>`<div class="gasto-row">
     <div class="gasto-icon" style="background:${catColor(g.categoria)}22">${catEmoji(g.categoria)}</div>
     <div class="gasto-info">
-      <div class="gasto-desc">${esc(g.descripcion||g.categoria)}<span class="badge ${g.source==='sheets'?'badge-sheets':'badge-local'}">${etiqueta(g)}</span></div>
+      <div class="gasto-desc"><span class="gasto-desc-t">${esc(g.descripcion||g.categoria)}</span><span class="badge ${g.error?'badge-error':g.pendiente?'badge-pend':g.source==='sheets'?'badge-sheets':'badge-local'}">${etiqueta(g)}</span></div>
       <div class="gasto-meta">${esc(g.categoria)} · ${fmtFecha(g.fecha)}${g.metodoPago?' · '+esc(g.metodoPago):''}</div>
     </div>
     <div class="gasto-amount">${fmt(g.monto)}</div>
@@ -1878,7 +1883,7 @@ const APP_TOKEN=''; // opcional: pega aquí el mismo token que valida tu Apps Sc
 let cola=lsGet('fin_cola',[]);
 let eliminados=lsGet('fin_eliminados',[]);const _tmpDel=new Set();
 function guardarEliminados(){try{localStorage.setItem('fin_eliminados',JSON.stringify(eliminados));}catch(e){}}
-let _procesando=false,_reintentoT=null,_jsonpN=0;
+let _procesando=false,_reintentoT=null,_jsonpN=0,ultimoMotivo='';
 function guardarCola(){try{localStorage.setItem('fin_cola',JSON.stringify(cola));}catch(e){}pintarPendientes();}
 function pintarPendientes(){const el=document.getElementById('sstatus');if(el&&cola.length)el.textContent=`⏳ ${cola.length} pendiente${cola.length!==1?'s':''} de enviar a Sheets`;}
 function quitarDeCola(pred){const n=cola.length;cola=cola.filter(x=>!pred(x));if(cola.length!==n)guardarCola();}
@@ -1916,7 +1921,12 @@ async function procesarCola(){
     try{res=await jsonp({...it.params,reqId:it.reqId});}catch(e){res=null;}
     if(res&&res.success){cola.shift();aplicarExito(it);ok++;guardarCola();continue;}
     it.intentos=(it.intentos||0)+1;
-    if(res&&it.intentos>=3){cola.shift();marcarError(it);rechazados++;guardarCola();continue;} // Sheets respondió que no: no bloquea al resto
+    if(res&&it.intentos>=3){ // Sheets respondió que no: no bloquea al resto, pero se guarda para reintentar con ↻
+      cola.shift();marcarError(it);rechazados++;
+      it.motivo=String(res.error||res.message||res.mensaje||'sin detalle').slice(0,120);ultimoMotivo=it.motivo;
+      const fl=lsGet('fin_fallidos',[]);fl.push(it);try{localStorage.setItem('fin_fallidos',JSON.stringify(fl.slice(-50)));}catch(e){}
+      guardarCola();continue;
+    }
     guardarCola();red=true;break;
   }
   _procesando=false;
@@ -1926,10 +1936,15 @@ async function procesarCola(){
     if(!cola.length&&st){st.textContent=`✓ Sincronizado · ${new Date().toLocaleTimeString('es-PE')}`;const d=document.getElementById('sdot');if(d)d.className='sdot on';}
     setTimeout(()=>connectSheets(),1500);
   }
-  if(rechazados&&st)st.textContent=`⚠ Sheets rechazó ${rechazados} registro${rechazados!==1?'s':''}. Revisa el token o el script.`;
+  if(rechazados){save();updateAll();}
+  if(rechazados&&st)st.textContent=`⚠ Sheets rechazó ${rechazados} registro${rechazados!==1?'s':''} (${ultimoMotivo}). Toca ↻ para reintentar.`;
   if(red&&cola.length){const n=cola[0].intentos;if(n<5)_reintentoT=setTimeout(procesarCola,Math.min(60000,5000*Math.pow(2,n-1)));}
 }
-function reintentarPendientes(){cola.forEach(x=>{x.intentos=0;});procesarCola();connectSheets();}
+function reintentarPendientes(){
+  const fl=lsGet('fin_fallidos',[]);
+  if(fl.length){fl.forEach(it=>{it.intentos=0;delete it.motivo;_marcar(it,x=>{delete x.error;x.pendiente=true;});if(!cola.some(c=>c.reqId===it.reqId))cola.push(it);});try{localStorage.removeItem('fin_fallidos');}catch(e){}save();guardarCola();updateAll();}
+  cola.forEach(x=>{x.intentos=0;});procesarCola();connectSheets();
+}
 window.addEventListener('online',()=>{cola.forEach(x=>{x.intentos=0;});procesarCola();});
 
 function enviarIngresoASheets(fecha,desc,monto){
@@ -1944,7 +1959,7 @@ function enviarMetaASheets(meta){
 }
 function enviarAbonoASheets(metaId,metaNombre,monto,nota,tipo){
   tipo=tipo||'abono';
-  const reqId=nuevoId('r'),fecha=new Date().toISOString().split('T')[0];
+  const reqId=nuevoId('r'),fecha=hoyLocal();
   abonos.push({id:nuevoId('ab'),reqId,metaId,metaNombre,monto,nota,fecha,tipo,source:'local',pendiente:true});
   save();updateAhorros();toast(tipo==='retiro'?'Retiro registrado':'Abono registrado','ok');
   encolar({reqId,kind:'abono',params:{accion:'abono',metaId:String(metaId),metaNombre,monto:String(monto),nota,fecha,tipo}});
@@ -2113,7 +2128,7 @@ function agregarIngreso(){
   const monto=parseFloat(document.getElementById('i-monto').value);
   const desc=document.getElementById('i-desc').value.trim();
   if(!monto||monto<=0){toastErr('Ingresa un monto válido');return;}
-  const fecha=new Date().toISOString().split('T')[0];
+  const fecha=hoyLocal();
   document.getElementById('i-monto').value='';
   document.getElementById('i-desc').value='';
   enviarIngresoASheets(fecha,desc||'Ingreso',monto);
@@ -2152,7 +2167,7 @@ function agregarFrecuenteManual(){
 function usarFrecuente(id){
   const f=frecuentes.find(x=>String(x.id)===String(id));
   if(!f) return;
-  const fecha=new Date().toISOString().split('T')[0];
+  const fecha=hoyLocal();
   cerrarModal();
     verificarLimiteYNotificar(f.monto,f.categoria,fecha);
     enviarASheets(fecha,f.categoria,f.monto,f.desc,f.metodoPago);
@@ -2186,7 +2201,7 @@ function agregarGastoRapido(){
   const cat=document.getElementById('m-cat').value;
   const desc=document.getElementById('m-desc').value.trim();
   if(!monto||monto<=0){toastErr('Ingresa un monto válido');return;}
-  const fecha=new Date().toISOString().split('T')[0];
+  const fecha=hoyLocal();
   recordarUltimo(cat,(lsGet('fin_ultimo',{}).pago)||'');
   document.getElementById('m-monto').value='';document.getElementById('m-desc').value='';
   cerrarModal();
@@ -2477,7 +2492,7 @@ function fabAbrirIngreso(){
   cerrarFabMenu();
   document.getElementById('ir-desc').value='';
   document.getElementById('ir-monto').value='';
-  document.getElementById('ir-fecha').value=new Date().toISOString().split('T')[0];
+  document.getElementById('ir-fecha').value=hoyLocal();
   document.getElementById('modal-ingreso-rapido').classList.add('open');
   setTimeout(()=>document.getElementById('ir-desc').focus(),100);
 }
@@ -2487,7 +2502,7 @@ function cerrarModalIngresoRapido(){document.getElementById('modal-ingreso-rapid
 function guardarIngresoRapido(){
   const monto=parseFloat(document.getElementById('ir-monto').value);
   const desc=document.getElementById('ir-desc').value.trim();
-  const fecha=document.getElementById('ir-fecha').value||new Date().toISOString().split('T')[0];
+  const fecha=document.getElementById('ir-fecha').value||hoyLocal();
   if(!monto||monto<=0){toastErr('Ingresa un monto válido');return;}
   cerrarModalIngresoRapido();
   enviarIngresoASheets(fecha,desc||'Ingreso',monto);
@@ -2579,7 +2594,7 @@ function updateDayView(){
 // INIT
 if(window.Chart){Chart.defaults.animation={duration:800,easing:'easeOutQuart'};}
 document.getElementById('limite-input').value=limite;
-document.getElementById('f-fecha').value=new Date().toISOString().split('T')[0];
+document.getElementById('f-fecha').value=hoyLocal();
 poblarCategorias();
 aplicarUltimo();
 const sid=localStorage.getItem('sheets_id');
