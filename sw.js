@@ -3,7 +3,7 @@
 // - Archivos propios: se sirven desde caché al instante y se actualizan en segundo plano.
 // - Google Sheets / Apps Script y cualquier otro dominio: pasan directo a la red (nunca se cachean).
 // Al publicar cambios grandes, sube el número de versión para limpiar la caché anterior.
-const VERSION = 'finanzas-v6';
+const VERSION = 'finanzas-v7';
 const CHART_URL = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
 const SHELL = ['./', 'index.html', 'manifest.json',
                'favicon-32.png', 'icono-192.png', 'icon-192.png', CHART_URL];
@@ -40,15 +40,20 @@ async function archivoPropio(req, e) {
   // no-cache: siempre pregunta al servidor si hay cambios (evita que GitHub Pages sirva una copia vieja hasta 10 min)
   const red = fetch(req, { cache: 'no-cache' }).then(async res => {
     if (res && res.ok && res.type === 'basic') {
-      const antes = guardado && guardado.headers.get('etag');
-      const ahora = res.headers.get('etag');
+      // Solo se compara el contenido de la página; los ETag pueden cambiar sin que haya una versión nueva
+      const esPagina = req.mode === 'navigate' || /(\/|index\.html)$/.test(new URL(req.url).pathname);
+      let cambio = false;
+      if (esPagina && guardado) {
+        const [viejo, nuevo] = await Promise.all([guardado.clone().text(), res.clone().text()]);
+        cambio = viejo !== nuevo;
+      }
       await cache.put(req, res.clone());
-      if (antes && ahora && antes !== ahora) avisarActualizacion();
+      if (cambio) avisarActualizacion();
     }
     return res;
   }).catch(() => null);
 
-  if (guardado) { e.waitUntil(red); return guardado; }
+  if (guardado) { e.waitUntil(red); return guardado.clone(); }
   const res = await red;
   if (res) return res;
   return req.mode === 'navigate' ? (await cache.match('index.html')) || Response.error() : Response.error();
