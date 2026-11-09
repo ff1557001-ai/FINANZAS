@@ -931,7 +931,7 @@ button,.tab,.filtro-chip,.frec-btn,.fab-option,[onclick]{touch-action:manipulati
       <div class="nota-ajuste">Al importar se suman los registros que falten; no se borra nada. Lo importado queda solo en este dispositivo.</div>
     </div>
 
-    <div class="nota-ajuste" style="text-align:center;margin:4px 0 18px">Versión 5 · gráficos sin parpadeo</div>
+    <div class="nota-ajuste" style="text-align:center;margin:4px 0 18px">Versión 6 · gráficos sin parpadeo</div>
 
     <div class="form-section">
       <div class="form-title">Gastos frecuentes configurados</div>
@@ -1397,7 +1397,12 @@ function montarChart(id,canvasId,cfg){
   const el=document.getElementById(canvasId);if(!el)return null;
   const ch=charts[id];
   if(ch&&ch.canvas===el&&ch.config&&ch.config.type===cfg.type){
-    ch.data.labels=cfg.data.labels;ch.data.datasets=cfg.data.datasets;
+    ch.data.labels=cfg.data.labels;
+    // Se conservan los MISMOS objetos de dataset y solo se copian los valores nuevos.
+    // Si se reemplazan por otros, Chart.js los toma como gráfico nuevo y repite la animación de entrada.
+    const viejos=ch.data.datasets,nuevos=cfg.data.datasets;
+    nuevos.forEach((n,i)=>{if(viejos[i])Object.assign(viejos[i],n);else viejos.push(n);});
+    viejos.length=nuevos.length;
     ch.options=Object.assign({},cfg.options,{animation:{duration:450,easing:'easeOutCubic'}});
     ch.update();return ch;
   }
@@ -2253,6 +2258,8 @@ function parseFecha(fRaw){
   return typeof fRaw==='string'?fRaw:'';
 }
 
+let _uaT=null;
+function updateAllSoon(){clearTimeout(_uaT);_uaT=setTimeout(updateAll,80);}
 function connectSheetsTab(id,tabName,cbName,tipo){
   const old=document.getElementById('sh-script-'+tipo);if(old)old.remove();
   if(window[cbName])delete window[cbName];
@@ -2278,7 +2285,7 @@ function connectSheetsTab(id,tabName,cbName,tipo){
         localStorage.setItem('sheets_id',id);
         document.getElementById('sdot').className='sdot on';
         document.getElementById('sstatus').textContent=`Conectado · ${visibles.length} gasto${visibles.length!==1?'s':''} · ${new Date().toLocaleTimeString('es-PE')}`;
-        updateAll();
+        updateAllSoon();
       } else if(tipo==='ingresos'){
         // cols: fecha, descripcion, monto
         const imported=rows.map((r,i)=>{
@@ -2290,7 +2297,7 @@ function connectSheetsTab(id,tabName,cbName,tipo){
         }).filter(i=>i.monto>0&&/^\d{4}-\d{2}$/.test(i.mes));
         ingresos=ingresos.filter(i=>i.source!=='sheets');
         ingresos=[...ingresos,...imported];
-        save();updateAll();
+        save();updateAllSoon();
       } else if(tipo==='metas'){
         // cols: metaId, nombre, objetivo, fechaLimite
         const imported=rows.map((r,i)=>{
