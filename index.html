@@ -931,7 +931,7 @@ button,.tab,.filtro-chip,.frec-btn,.fab-option,[onclick]{touch-action:manipulati
       <div class="nota-ajuste">Al importar se suman los registros que falten; no se borra nada. Lo importado queda solo en este dispositivo.</div>
     </div>
 
-    <div class="nota-ajuste" style="text-align:center;margin:4px 0 18px">Versión 7</div>
+    <div class="nota-ajuste" style="text-align:center;margin:4px 0 18px">Versión 8</div>
 
     <div class="form-section">
       <div class="form-title">Gastos frecuentes configurados</div>
@@ -1911,7 +1911,7 @@ const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbwgdlrNZv8pWVi203
 const APP_TOKEN=''; // opcional: pega aquí el mismo token que valida tu Apps Script
 
 let cola=lsGet('fin_cola',[]);
-let eliminados=lsGet('fin_eliminados',[]);const _tmpDel=new Set();
+let eliminados=lsGet('fin_eliminados',[]);const _tmpDel=new Set(),_reElim={};
 function guardarEliminados(){try{localStorage.setItem('fin_eliminados',JSON.stringify(eliminados));}catch(e){}}
 let _procesando=false,_reintentoT=null,_jsonpN=0,ultimoMotivo='';
 function guardarCola(){try{localStorage.setItem('fin_cola',JSON.stringify(cola));}catch(e){}pintarPendientes();}
@@ -1948,7 +1948,7 @@ async function procesarCola(){
     const it=cola[0];
     if(it.dep){const d=gastos.find(x=>x.reqId===it.dep);if(d&&d.error){cola.shift();eliminados=eliminados.filter(x=>x!==it.params.gastoId);guardarEliminados();guardarCola();continue;}}
     let res=null;
-    try{res=await jsonp({...it.params,reqId:it.reqId});}catch(e){res=null;}
+    try{res=await jsonp({...it.params,reqId:it.reqId},25000);}catch(e){res=null;}
     if(res&&res.success){cola.shift();aplicarExito(it);ok++;guardarCola();continue;}
     it.intentos=(it.intentos||0)+1;
     if(res&&it.intentos>=3){ // Sheets respondió que no: no bloquea al resto, pero se guarda para reintentar con ↻
@@ -1968,14 +1968,22 @@ async function procesarCola(){
   }
   if(rechazados){save();updateAll();}
   if(rechazados&&st)st.textContent=`⚠ Sheets rechazó ${rechazados} registro${rechazados!==1?'s':''} (${ultimoMotivo}). Toca ↻ para reintentar.`;
-  if(red&&cola.length){const n=cola[0].intentos;if(n<5)_reintentoT=setTimeout(procesarCola,Math.min(60000,5000*Math.pow(2,n-1)));}
+  if(red&&cola.length){const n=cola[0].intentos;if(n<5)_reintentoT=setTimeout(reconciliarYProcesar,Math.min(60000,5000*Math.pow(2,n-1)));}
 }
 function reintentarPendientes(){
   const fl=lsGet('fin_fallidos',[]);
   if(fl.length){fl.forEach(it=>{it.intentos=0;delete it.motivo;_marcar(it,x=>{delete x.error;x.pendiente=true;});if(!cola.some(c=>c.reqId===it.reqId))cola.push(it);});try{localStorage.removeItem('fin_fallidos');}catch(e){}save();guardarCola();updateAll();}
-  cola.forEach(x=>{x.intentos=0;});procesarCola();connectSheets();
+  cola.forEach(x=>{x.intentos=0;});reconciliarYProcesar();
 }
-window.addEventListener('online',()=>{cola.forEach(x=>{x.intentos=0;});procesarCola();});
+// Antes de reenviar gastos pendientes se consulta Sheets: si ya llegaron, no se duplican
+function reconciliarYProcesar(){
+  const id=((document.getElementById('sheets-id')||{}).value||'').trim();
+  if(id&&cola.some(x=>x.kind==='gasto')){
+    connectSheets(true);
+    setTimeout(()=>{if(!window._gastosLeidos)procesarCola();},15000);   // si Sheets no responde, se reintenta igual
+  }else{procesarCola();if(id)connectSheets(true);}
+}
+window.addEventListener('online',()=>{cola.forEach(x=>{x.intentos=0;});reconciliarYProcesar();});
 
 function enviarIngresoASheets(fecha,desc,monto){
   const reqId=nuevoId('r');
@@ -1995,8 +2003,14 @@ function enviarAbonoASheets(metaId,metaNombre,monto,nota,tipo){
   save();updateAhorros();toast(tipo==='retiro'?'Retiro registrado':'Abono registrado','ok');
   encolar({reqId,kind:'abono',params:{accion:'abono',metaId:String(metaId),metaNombre,monto:String(monto),nota,fecha,tipo}});
 }
+let _ultimaHuella={k:'',t:0};
 function enviarASheets(fecha,cat,monto,desc,pago,gid,silencioso){
   cat=canonCat(cat);
+  if(!silencioso){
+    const k=[fecha,cat,monto,desc,pago].join('|'),ahora=Date.now();
+    if(_ultimaHuella.k===k&&ahora-_ultimaHuella.t<4000){toast('Ese gasto ya se registró hace un momento','warn');return;}
+    _ultimaHuella={k,t:ahora};
+  }
   const reqId=nuevoId('r'),gastoId=gid||nuevoId('g');
   gastos.push({id:nuevoId('loc'),gastoId,reqId,monto,categoria:cat,fecha,descripcion:desc,metodoPago:pago,source:'local',pendiente:true});
   if(!silencioso)reiniciarGraficos(['dona','linea']);
@@ -2242,11 +2256,11 @@ function agregarGastoRapido(){
 }
 
 // SHEETS
-function connectSheets(){
+function connectSheets(silencioso){
   const id=document.getElementById('sheets-id').value.trim();
-  if(!id){toastErr('Pega el ID de tu Google Sheet');return;}
+  if(!id){if(!silencioso)toastErr('Pega el ID de tu Google Sheet');return;}
   document.getElementById('sstatus').textContent='Conectando...';
-  procesarCola();
+  window._gastosLeidos=false;
   setTimeout(()=>{const e=document.getElementById('sstatus');if(e&&e.textContent==='Conectando...')e.textContent='⚠ Sheets no responde. Revisa tu conexión.';},15000);
   connectSheetsTab(id,'Respuestas de formulario 1','__sheetsCallback','gastos');
   connectSheetsTab(id,'Ingresos','__sheetsIngCallback','ingresos');
@@ -2272,7 +2286,7 @@ function connectSheetsTab(id,tabName,cbName,tipo){
     try{
       const rows=(response.table||response).rows||[];
       if(tipo==='gastos'){
-        const imported=rows.map((r,i)=>{
+        let imported=rows.map((r,i)=>{
           const fRaw=r.c[1]?.v||'';
           const cat=canonCat(r.c[2]?.v||'Otro');
           const monto=parseFloat(r.c[3]?.v)||0;
@@ -2281,7 +2295,20 @@ function connectSheetsTab(id,tabName,cbName,tipo){
           const gastoId=(r.c&&r.c[7]&&r.c[7].v)?String(r.c[7].v):'';
           return{id:'sh_'+i,gastoId,monto,categoria:cat,fecha:parseFecha(fRaw),descripcion:desc,metodoPago:pago,source:'sheets'};
         }).filter(g=>g.monto>0&&/^\d{4}-\d{2}-\d{2}$/.test(g.fecha));
+        // Un mismo gastoId en dos filas es el mismo gasto escrito dos veces (reintento): se muestra una sola vez
+        let dups=0;const vistosId=new Set();
+        imported=imported.filter(g=>{if(!g.gastoId)return true;if(vistosId.has(g.gastoId)){dups++;return false;}vistosId.add(g.gastoId);return true;});
+        // Si un gasto pendiente o rechazado ya está en Sheets (la respuesta se perdió), no se reenvía ni se muestra doble
+        const yaLlegaron=cola.filter(x=>x.kind==='gasto'&&vistosId.has(x.params.gastoId));
+        if(yaLlegaron.length)quitarDeCola(x=>yaLlegaron.includes(x));
+        try{localStorage.setItem('fin_fallidos',JSON.stringify(lsGet('fin_fallidos',[]).filter(it=>!(it.kind==='gasto'&&vistosId.has(it.params.gastoId)))));}catch(e){}
+        gastos=gastos.filter(g=>!(g.source==='local'&&g.gastoId&&vistosId.has(g.gastoId)));
         const enSheet=new Set(imported.map(g=>g.gastoId));
+        // Si borraste un gasto y aún queda alguna copia en Sheets, se pide borrarla de nuevo (máx. 3 veces)
+        eliminados.filter(id=>enSheet.has(id)).forEach(id=>{
+          if(cola.some(x=>x.kind==='eliminar'&&x.params.gastoId===id))return;
+          if((_reElim[id]=(_reElim[id]||0)+1)<=3)encolar({reqId:nuevoId('r'),kind:'eliminar',params:{accion:'eliminarGasto',gastoId:id}});
+        });
         eliminados=eliminados.filter(id=>enSheet.has(id));guardarEliminados();
         const visibles=imported.filter(g=>!(g.gastoId&&(eliminados.includes(g.gastoId)||_tmpDel.has(g.gastoId))));
         gastos=gastos.filter(g=>g.source!=='sheets');
@@ -2289,8 +2316,10 @@ function connectSheetsTab(id,tabName,cbName,tipo){
         poblarCategorias();aplicarRecurrentes();
         localStorage.setItem('sheets_id',id);
         document.getElementById('sdot').className='sdot on';
-        document.getElementById('sstatus').textContent=`Conectado · ${visibles.length} gasto${visibles.length!==1?'s':''} · ${new Date().toLocaleTimeString('es-PE')}`;
+        document.getElementById('sstatus').textContent=`Conectado · ${visibles.length} gasto${visibles.length!==1?'s':''}${dups?` · ${dups} repetido${dups!==1?'s':''} oculto${dups!==1?'s':''}`:''} · ${new Date().toLocaleTimeString('es-PE')}`;
+        window._gastosLeidos=true;
         updateAllSoon();
+        if(cola.length)procesarCola();   // ya reconciliado: se envía solo lo que de verdad falta
       } else if(tipo==='ingresos'){
         // cols: fecha, descripcion, monto
         const imported=rows.map((r,i)=>{
